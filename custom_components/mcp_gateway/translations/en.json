@@ -1,0 +1,14 @@
+{
+  "title": "MCP Gateway",
+  "config": {
+    "step": {
+      "user": {
+        "title": "MCP Gateway",
+        "description": "Set up MCP Gateway to provide per-device MCP server endpoints."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured."
+    }
+  }
+}

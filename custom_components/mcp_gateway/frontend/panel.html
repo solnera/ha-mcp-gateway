@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Device MCP Server</title>
+<style>
+  :root {
+    --primary-color: #03a9f4;
+    --primary-dark: #0288d1;
+    --bg-color: #f5f6fa;
+    --card-bg: #ffffff;
+    --text-primary: #212121;
+    --text-secondary: #757575;
+    --border-color: #e0e0e0;
+    --success-color: #4caf50;
+    --disabled-color: #9e9e9e;
+    --shadow: 0 2px 6px rgba(0,0,0,0.1);
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    padding: 24px;
+    line-height: 1.5;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  .header .stats {
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+
+  .device-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 16px;
+  }
+
+  .device-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+
+  .device-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  .device-card.disabled {
+    opacity: 0.6;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .card-header:hover {
+    background: #fafafa;
+  }
+
+  .device-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+    flex-shrink: 0;
+    color: white;
+    font-size: 20px;
+  }
+
+  .device-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .device-name {
+    font-weight: 600;
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .device-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 12px;
+    margin-top: 2px;
+  }
+
+  .tool-badge {
+    background: #e3f2fd;
+    color: var(--primary-dark);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: #ccc;
+    border-radius: 24px;
+    transition: 0.3s;
+  }
+
+  .toggle-slider:before {
+    content: "";
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.3s;
+  }
+
+  .toggle-switch input:checked + .toggle-slider {
+    background: var(--primary-color);
+  }
+
+  .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+  }
+
+  .expand-icon {
+    margin-left: 8px;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  .expand-icon.open {
+    transform: rotate(180deg);
+  }
+
+  .card-details {
+    display: none;
+    border-top: 1px solid var(--border-color);
+    padding: 16px;
+  }
+
+  .card-details.open {
+    display: block;
+  }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .endpoint-box {
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 12px;
+    word-break: break-all;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .endpoint-box code {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+
+  .copy-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .copy-btn:hover {
+    background: #eee;
+  }
+
+  .tool-list {
+    list-style: none;
+    margin-bottom: 16px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  .tool-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .tool-item:last-child {
+    border-bottom: none;
+  }
+
+  .tool-name {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--primary-dark);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .tool-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .prompt-section {
+    margin-top: 4px;
+  }
+
+  .prompt-textarea {
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .prompt-textarea:focus {
+    border-color: var(--primary-color);
+  }
+
+  .save-btn {
+    margin-top: 8px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .save-btn:hover {
+    background: var(--primary-dark);
+  }
+
+  .save-btn:disabled {
+    background: var(--disabled-color);
+    cursor: not-allowed;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+  }
+
+  .empty-state .icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-secondary);
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #323232;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 1000;
+  }
+
+  .toast.show {
+    opacity: 1;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Device MCP Server</h1>
+  <span class="stats" id="stats"></span>
+</div>
+
+<div id="content">
+  <div class="loading">Loading devices...</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  // HA WebSocket connection
+  let ws = null;
+  let msgId = 1;
+  const pending = {};
+  let authenticated = false;
+  let devices = [];
+  let expandedDevices = {};
+  let toolsCache = {};
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/api/websocket`);
+
+    ws.onopen = () => {};
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'auth_required') {
+        // Get token from HA
+        const token = getAccessToken();
+        if (token) {
+          ws.send(JSON.stringify({ type: 'auth', access_token: token }));
+        }
+        return;
+      }
+
+      if (msg.type === 'auth_ok') {
+        authenticated = true;
+        loadDevices();
+        return;
+      }
+
+      if (msg.type === 'result' && pending[msg.id]) {
+        const { resolve, reject } = pending[msg.id];
+        delete pending[msg.id];
+        if (msg.success) {
+          resolve(msg.result);
+        } else {
+          reject(msg.error);
+        }
+      }
+    };
+
+    ws.onclose = () => {
+      authenticated = false;
+      setTimeout(connect, 3000);
+    };
+  }
+
+  function getAccessToken() {
+    // When embedded as iframe, get token from parent
+    try {
+      const searchParams = new URLSearchParams(location.search);
+      if (searchParams.has('token')) return searchParams.get('token');
+    } catch(e) {}
+
+    // Try localStorage (HA stores tokens there)
+    try {
+      const hassTokens = JSON.parse(localStorage.getItem('hassTokens'));
+      if (hassTokens && hassTokens.access_token) return hassTokens.access_token;
+    } catch(e) {}
+
+    // Try getting from parent window
+    try {
+      if (window.parent && window.parent.hassConnection) {
+        return window.parent.hassConnection.auth.accessToken;
+      }
+    } catch(e) {}
+
+    return null;
+  }
+
+  function sendCommand(type, data = {}) {
+    return new Promise((resolve, reject) => {
+      const id = msgId++;
+      pending[id] = { resolve, reject };
+      ws.send(JSON.stringify({ id, type, ...data }));
+    });
+  }
+
+  async function loadDevices() {
+    try {
+      const result = await sendCommand('mcp_gateway/get_devices');
+      devices = result.devices || [];
+      render();
+    } catch (e) {
+      document.getElementById('content').innerHTML =
+        '<div class="empty-state"><div class="icon">&#9888;</div><p>Failed to load devices</p></div>';
+    }
+  }
+
+  async function loadTools(deviceId) {
+    if (toolsCache[deviceId]) return toolsCache[deviceId];
+    try {
+      const result = await sendCommand('mcp_gateway/get_device_tools', { device_id: deviceId });
+      toolsCache[deviceId] = result;
+      return result;
+    } catch(e) {
+      return null;
+    }
+  }
+
+  async function toggleDevice(deviceId, enabled) {
+    try {
+      await sendCommand('mcp_gateway/update_device', { device_id: deviceId, enabled });
+      const d = devices.find(d => d.device_id === deviceId);
+      if (d) d.enabled = enabled;
+      render();
+      showToast(enabled ? 'Device enabled' : 'Device disabled');
+    } catch(e) {
+      showToast('Failed to update device');
+    }
+  }
+
+  async function savePrompt(deviceId) {
+    const textarea = document.getElementById(`prompt-${deviceId}`);
+    if (!textarea) return;
+    const btn = document.getElementById(`save-btn-${deviceId}`);
+    if (btn) btn.disabled = true;
+
+    try {
+      await sendCommand('mcp_gateway/update_device', {
+        device_id: deviceId,
+        custom_prompt: textarea.value,
+      });
+      showToast('Prompt saved');
+    } catch(e) {
+      showToast('Failed to save prompt');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function toggleExpand(deviceId) {
+    if (expandedDevices[deviceId]) {
+      delete expandedDevices[deviceId];
+      render();
+    } else {
+      expandedDevices[deviceId] = true;
+      render();
+      // Load tools on expand
+      const data = await loadTools(deviceId);
+      if (data) renderTools(deviceId, data);
+    }
+  }
+
+  function renderTools(deviceId, data) {
+    const toolList = document.getElementById(`tools-${deviceId}`);
+    if (!toolList) return;
+
+    if (!data.tools || data.tools.length === 0) {
+      toolList.innerHTML = '<div style="color:var(--text-secondary);font-size:13px;">No tools</div>';
+      return;
+    }
+
+    toolList.innerHTML = data.tools.map(t =>
+      `<li class="tool-item">
+        <span class="tool-name">${esc(t.name)}</span>
+        <span class="tool-desc">${esc(t.description)}</span>
+      </li>`
+    ).join('');
+  }
+
+  function render() {
+    const stats = document.getElementById('stats');
+    const enabledCount = devices.filter(d => d.enabled).length;
+    stats.textContent = `${devices.length} devices, ${enabledCount} enabled`;
+
+    const content = document.getElementById('content');
+    if (devices.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">&#128268;</div>
+          <p>No MCP devices registered</p>
+          <p style="font-size:13px;margin-top:8px;">
+            Install integrations with MCP support to see devices here.
+          </p>
+        </div>`;
+      return;
+    }
+
+    content.innerHTML = `<div class="device-grid">${devices.map(renderCard).join('')}</div>`;
+
+    // Re-render tools for expanded devices
+    Object.keys(expandedDevices).forEach(id => {
+      if (toolsCache[id]) renderTools(id, toolsCache[id]);
+    });
+  }
+
+  function renderCard(device) {
+    const expanded = !!expandedDevices[device.device_id];
+    const endpoint = `http://${location.hostname}:${device.port}/mcp`;
+
+    return `
+      <div class="device-card ${device.enabled ? '' : 'disabled'}">
+        <div class="card-header" onclick="window.__mcp.toggleExpand('${device.device_id}')">
+          <div class="device-icon">&#9881;</div>
+          <div class="device-info">
+            <div class="device-name">${esc(device.name)}</div>
+            <div class="device-meta">
+              ${device.model ? `<span>${esc(device.model)}</span>` : ''}
+              ${device.manufacturer ? `<span>${esc(device.manufacturer)}</span>` : ''}
+              <span class="tool-badge">${device.tool_count} tools</span>
+            </div>
+          </div>
+          <label class="toggle-switch" onclick="event.stopPropagation()">
+            <input type="checkbox" ${device.enabled ? 'checked' : ''}
+              onchange="window.__mcp.toggleDevice('${device.device_id}', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="expand-icon ${expanded ? 'open' : ''}">&#9660;</span>
+        </div>
+        <div class="card-details ${expanded ? 'open' : ''}">
+          <div class="section-title">MCP Endpoint</div>
+          <div class="endpoint-box">
+            <code>${esc(endpoint)}</code>
+            <button class="copy-btn" onclick="window.__mcp.copy('${esc(endpoint)}')">Copy</button>
+          </div>
+          <div class="section-title">Tools</div>
+          <ul class="tool-list" id="tools-${device.device_id}">
+            <li style="color:var(--text-secondary);font-size:13px;">Loading...</li>
+          </ul>
+          <div class="prompt-section">
+            <div class="section-title">Custom Prompt</div>
+            <textarea class="prompt-textarea" id="prompt-${device.device_id}"
+              placeholder="Override the default device prompt for LLM context..."
+            >${esc(device.custom_prompt || '')}</textarea>
+            <button class="save-btn" id="save-btn-${device.device_id}"
+              onclick="window.__mcp.savePrompt('${device.device_id}')">Save Prompt</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function copy(text) {
+    navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard'));
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Expose functions for inline handlers
+  window.__mcp = { toggleExpand, toggleDevice, savePrompt, copy };
+
+  connect();
+})();
+</script>
+</body>
+</html>
