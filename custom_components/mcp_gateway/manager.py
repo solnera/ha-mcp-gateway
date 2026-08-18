@@ -21,6 +21,7 @@ from zeroconf import ServiceInfo
 from .api import GetDescriptionTool, MCPGatewayAPI
 from .const import DOMAIN, MDNS_SERVICE_TYPE, PORT_RANGE_END, PORT_RANGE_START
 from .http import MCPGatewayHttpServer
+from .schema import has_response_schema
 from .session import SessionManager
 from .store import MCPGatewayStore
 from .types import DeviceDescription, MCPGatewayEntry
@@ -69,6 +70,9 @@ class MCPGatewayManager:
     ) -> Callable[[], None]:
         """Register MCP tools for a device and start its HTTP server.
 
+        Every tool must declare a response schema; tools without one are
+        dropped, so that each published tool carries an outputSchema.
+
         Returns an unregister callable.
         """
         # Replace existing registration if present
@@ -83,7 +87,7 @@ class MCPGatewayManager:
         # Add the get_description tool to the front of the tools list
         all_tools: list[llm.Tool] = [
             GetDescriptionTool(device_description),
-            *tools,
+            *self._filter_tools(device_id, tools),
         ]
 
         # Allocate a port
@@ -140,6 +144,20 @@ class MCPGatewayManager:
                 self.hass.async_create_task(self._async_unregister(device_id))
 
         return unregister
+
+    def _filter_tools(self, device_id: str, tools: list[llm.Tool]) -> list[llm.Tool]:
+        """Drop the tools that do not declare a response schema."""
+        valid: list[llm.Tool] = []
+        for tool in tools:
+            if not has_response_schema(tool):
+                _LOGGER.error(
+                    "Tool %s of device %s declares no response schema, not exposing it",
+                    getattr(tool, "name", tool),
+                    device_id,
+                )
+                continue
+            valid.append(tool)
+        return valid
 
     async def _async_unregister(self, device_id: str) -> None:
         """Unregister a device's MCP tools, stop HTTP server and mDNS."""

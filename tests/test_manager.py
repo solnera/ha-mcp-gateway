@@ -41,6 +41,30 @@ async def test_register_device(
     await hass.async_block_till_done()
 
 
+async def test_register_drops_tool_without_response_schema(
+    hass: HomeAssistant,
+    manager,
+    sample_tools,
+    tool_without_response_schema,
+    sample_description,
+    mock_http_server,
+) -> None:
+    """Test that a tool without a response schema is not exposed."""
+    unsub = await manager.async_register(
+        "device_1",
+        [*sample_tools, tool_without_response_schema],
+        "Test prompt",
+        sample_description,
+    )
+
+    entry = manager.async_get_entry("device_1")
+    assert entry is not None
+    assert [tool.name for tool in entry.tools] == ["get_description", "test_tool"]
+
+    unsub()
+    await hass.async_block_till_done()
+
+
 async def test_register_without_description(
     hass: HomeAssistant, manager, sample_tools, mock_http_server
 ) -> None:

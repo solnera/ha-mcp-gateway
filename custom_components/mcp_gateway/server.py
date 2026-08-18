@@ -2,6 +2,10 @@
 
 Creates an MCP Server scoped to a single device's LLM API.
 Adapted from homeassistant.components.mcp_server.server.
+
+Every tool is published with both an inputSchema and an outputSchema, and
+every tool result is returned as structured content so that it can be
+validated against the outputSchema.
 """
 
 import json
@@ -15,21 +19,33 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from mcp import types
 from mcp.server import Server
-from voluptuous_openapi import convert
+
+from .schema import convert_schema, has_response_schema
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _format_tool(tool: llm.Tool, custom_serializer: Callable[[Any], Any] | None) -> types.Tool:
-    """Format tool specification."""
-    input_schema = convert(tool.parameters, custom_serializer=custom_serializer)
+    """Format tool specification.
+
+    A tool without a response schema is published without an outputSchema;
+    such tools are rejected at registration time, so this only guards against
+    a tool reaching the protocol layer by another route.
+    """
+    input_schema = convert_schema(tool.parameters, custom_serializer)
+    output_schema: dict[str, Any] | None = None
+    if has_response_schema(tool):
+        output_schema = convert_schema(tool.response_schema, custom_serializer)
+    else:
+        _LOGGER.warning("Tool %s has no response schema", tool.name)
     return types.Tool(
         name=tool.name,
         description=tool.description or "",
         inputSchema={
             "type": "object",
-            "properties": input_schema["properties"],
+            "properties": input_schema.get("properties", {}),
         },
+        outputSchema=output_schema,
     )
 
 
@@ -84,8 +100,14 @@ async def create_device_server(
         return [_format_tool(tool, llm_api.custom_serializer) for tool in llm_api.tools]
 
     @server.call_tool()  # type: ignore[untyped-decorator]
-    async def call_tool(name: str, arguments: dict) -> Sequence[types.TextContent]:
-        """Handle calling a device tool."""
+    async def call_tool(
+        name: str, arguments: dict
+    ) -> tuple[Sequence[types.TextContent], dict[str, Any] | None]:
+        """Handle calling a device tool.
+
+        Returns the response both as text content and as structured content,
+        the latter being what the tool's outputSchema describes.
+        """
         llm_api = await get_api_instance()
         tool_input = llm.ToolInput(tool_name=name, tool_args=arguments)
         _LOGGER.info("Tool call: %s(%s)", tool_input.tool_name, tool_input.tool_args)
@@ -97,11 +119,14 @@ async def create_device_server(
             raise HomeAssistantError(f"Error calling tool: {e}") from e
 
         _LOGGER.debug("Tool call %s result: %s", name, tool_response)
-        return [
-            types.TextContent(
-                type="text",
-                text=json.dumps(tool_response, ensure_ascii=False),
-            )
-        ]
+        return (
+            [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(tool_response, ensure_ascii=False),
+                )
+            ],
+            tool_response if isinstance(tool_response, dict) else None,
+        )
 
     return server

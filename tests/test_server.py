@@ -7,7 +7,9 @@ directly via the mock Server's captured callbacks.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+import voluptuous as vol
 
 
 def _make_api_instance(tools=None, prompt="Test prompt"):
@@ -36,6 +38,68 @@ async def test_get_description_tool() -> None:
     assert result["model"] == "X100"
     assert result["alias"] == "My Device"
     assert result["device_id"] == "d1"
+
+
+async def test_get_description_tool_response_schema() -> None:
+    """Test the GetDescriptionTool declares a schema matching its response."""
+    from custom_components.mcp_gateway.api import GetDescriptionTool
+    from custom_components.mcp_gateway.schema import has_response_schema
+    from custom_components.mcp_gateway.types import DeviceDescription
+
+    tool = GetDescriptionTool(DeviceDescription(brand="Acme", device_id="d1"))
+
+    assert has_response_schema(tool) is True
+    result = await tool.async_call(MagicMock(), MagicMock(), MagicMock())
+    # The unset fields are dropped, so the schema must not require them.
+    assert tool.response_schema(result) == result
+
+
+def test_format_tool_publishes_both_schemas() -> None:
+    """Test that a tool is published with an input and an output schema."""
+    from custom_components.mcp_gateway import server as server_mod
+
+    tool = MagicMock()
+    tool.name = "my_tool"
+    tool.description = "Do something"
+    tool.parameters = vol.Schema({vol.Required("value"): int})
+    tool.response_schema = vol.Schema({vol.Required("success"): bool})
+
+    schemas = {
+        "in": {"type": "object", "properties": {"value": {"type": "integer"}}},
+        "out": {"type": "object", "properties": {"success": {"type": "boolean"}}},
+    }
+    with (
+        patch.object(server_mod, "convert_schema", side_effect=[schemas["in"], schemas["out"]]),
+        patch.object(server_mod.types, "Tool") as mock_tool,
+    ):
+        server_mod._format_tool(tool, None)
+
+    kwargs = mock_tool.call_args.kwargs
+    assert kwargs["name"] == "my_tool"
+    assert kwargs["inputSchema"] == {
+        "type": "object",
+        "properties": {"value": {"type": "integer"}},
+    }
+    assert kwargs["outputSchema"] == schemas["out"]
+
+
+def test_format_tool_without_response_schema() -> None:
+    """Test that a tool without a response schema gets no output schema."""
+    from custom_components.mcp_gateway import server as server_mod
+
+    tool = MagicMock()
+    tool.name = "my_tool"
+    tool.description = "Do something"
+    tool.parameters = vol.Schema({})
+    tool.response_schema = None
+
+    with (
+        patch.object(server_mod, "convert_schema", return_value={"properties": {}}),
+        patch.object(server_mod.types, "Tool") as mock_tool,
+    ):
+        server_mod._format_tool(tool, None)
+
+    assert mock_tool.call_args.kwargs["outputSchema"] is None
 
 
 async def test_mcp_gateway_api_instance() -> None:
