@@ -11,5 +11,5 @@
   "loggers": ["custom_components.mcp_gateway"],
   "requirements": ["mcp==1.26.0", "aiohttp_sse==2.2.0", "anyio==4.13.0"],
   "single_config_entry": true,
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
