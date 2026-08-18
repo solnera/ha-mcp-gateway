@@ -38,6 +38,34 @@ After setup, an **MCP Gateway** panel will appear in the sidebar.
 
 ## Providing MCP Tools from Your Integration
 
+Every tool must declare **both** schemas:
+
+- `parameters` — the input schema, published as the MCP tool's `inputSchema`
+- `response_schema` — the response schema, published as the MCP tool's `outputSchema`
+
+Both are voluptuous schemas. Each tool result is returned as structured
+content and validated against the response schema, so the schema has to
+describe what `async_call()` actually returns. A tool without a response
+schema is **not** exposed — it is dropped with an error in the log.
+
+```python
+import voluptuous as vol
+from homeassistant.helpers import llm
+
+
+class MyTool(llm.Tool):
+    """Set the target temperature."""
+
+    name = "set_temperature"
+    description = "Set the target temperature in degrees Celsius"
+    parameters = vol.Schema({vol.Required("value"): vol.All(vol.Coerce(float), vol.Range(min=5, max=35))})
+    response_schema = vol.Schema({vol.Required("success"): bool})
+
+    async def async_call(self, hass, tool_input, llm_context):
+        """Return an object matching response_schema."""
+        return {"success": True}
+```
+
 ### Option 1: Platform Auto-discovery
 
 Create an `mcp.py` file in your integration:

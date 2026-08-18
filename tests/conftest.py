@@ -15,6 +15,7 @@ from typing import Any as _Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import voluptuous as vol
 from homeassistant.components import http as _http_mod
 from homeassistant.util import json as _json_mod
 
@@ -58,6 +59,7 @@ class _MockTool:
     name: str = ""
     description: str = ""
     parameters: _Any = None
+    response_schema: _Any = None
 
 
 _mock_llm = _ensure_module(
@@ -255,8 +257,20 @@ def sample_tools():
     tool = MagicMock()
     tool.name = "test_tool"
     tool.description = "A test tool"
-    tool.parameters = {}
+    tool.parameters = vol.Schema({})
+    tool.response_schema = vol.Schema({vol.Required("success"): bool})
     return [tool]
+
+
+@pytest.fixture
+def tool_without_response_schema():
+    """Create an LLM tool that does not declare a response schema."""
+    tool = MagicMock()
+    tool.name = "schemaless_tool"
+    tool.description = "A tool without a response schema"
+    tool.parameters = vol.Schema({})
+    tool.response_schema = None
+    return tool
 
 
 @pytest.fixture
